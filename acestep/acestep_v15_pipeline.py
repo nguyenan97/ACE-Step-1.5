@@ -566,14 +566,17 @@ def main():
                             file=sys.stderr,
                         )
 
+                    # Same override as the API server: lets low-VRAM tiers keep
+                    # DiT on CUDA while the LM runs on CPU.
+                    lm_device = os.environ.get("ACESTEP_LM_DEVICE") or args.device
                     print(
-                        f"Initializing 5Hz LM: {args.lm_model_path} on {args.device}..."
+                        f"Initializing 5Hz LM: {args.lm_model_path} on {lm_device}..."
                     )
                     lm_status, lm_success = llm_handler.initialize(
                         checkpoint_dir=checkpoint_dir,
                         lm_model_path=args.lm_model_path,
                         backend=args.backend,
-                        device=args.device,
+                        device=lm_device,
                         offload_to_cpu=args.offload_to_cpu,
                         dtype=None,
                     )

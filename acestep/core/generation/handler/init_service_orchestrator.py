@@ -22,6 +22,21 @@ def _cuda_supports_bfloat16() -> bool:
     return gpu_config.cuda_supports_bfloat16()
 
 
+def resolve_cuda_dtype_override() -> Optional[torch.dtype]:
+    """Return the CUDA dtype forced by ``ACESTEP_DTYPE``, or None when unset.
+
+    Needed on GPUs with unreliable float16 (e.g. Turing TU117 such as
+    Quadro T2000), where float16 diffusion produces NaN latents.
+    """
+    raw = os.environ.get("ACESTEP_DTYPE", "").strip().lower()
+    if not raw:
+        return None
+    dtype = _ROCM_DTYPE_MAP.get(raw)
+    if dtype is None:
+        logger.warning(f"[initialize_service] Unknown ACESTEP_DTYPE={raw!r}; ignoring.")
+    return dtype
+
+
 def _resolve_rocm_dtype() -> torch.dtype:
     """Return a safe model dtype for ROCm/HIP devices.
 
@@ -89,7 +104,13 @@ class InitServiceOrchestratorMixin:
                     "(set ACESTEP_ROCM_DTYPE=bfloat16 or float16 to override)"
                 )
             elif resolved_device == "cuda":
-                if gpu_config.cuda_supports_bfloat16():
+                forced_dtype = resolve_cuda_dtype_override()
+                if forced_dtype is not None:
+                    self.dtype = forced_dtype
+                    logger.info(
+                        f"[initialize_service] ACESTEP_DTYPE override: using dtype={forced_dtype}"
+                    )
+                elif gpu_config.cuda_supports_bfloat16():
                     self.dtype = torch.bfloat16
                 else:
                     self.dtype = torch.float16
